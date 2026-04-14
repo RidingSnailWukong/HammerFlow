@@ -1,0 +1,8 @@
+[
+    { "name": "Google Chrome",  "bundleID": "com.google.Chrome" },
+    { "name": "Visual Studio Code", "bundleID": "com.microsoft.VSCode" },
+    { "name": "Obsidian",       "bundleID": "md.obsidian" },
+    { "name": "WeChat",         "bundleID": "com.tencent.xinWeChat" },
+    { "name": "Terminal",       "bundleID": "com.apple.Terminal" },
+    { "name": "Finder",         "bundleID": "com.apple.finder" }
+]

@@ -1,0 +1,15 @@
+{
+  "autoSwitch": true,
+  "output": {
+    "priority": [
+      "AirPods Pro",
+      "MacBook Pro扬声器"
+    ]
+  },
+  "input": {
+    "priority": [
+      "AirPods Pro",
+      "MacBook Pro麦克风"
+    ]
+  }
+}

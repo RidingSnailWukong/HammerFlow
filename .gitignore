@@ -1,0 +1,14 @@
+# 个人配置（包含私人路径和设备信息）
+config/
+
+# WorkBuddy 私有数据
+.workbuddy/
+
+# Hammerspoon 缓存
+.DS_Store
+
+# Spoons 目录（如无自定义 Spoon 可忽略）
+# Spoons/
+
+# CodeBuddy 项目数据
+.codebuddy/

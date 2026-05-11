@@ -120,6 +120,7 @@ function CircleLauncher:createCanvas()
 
             table.insert(self.appButtons, {
                 app = appInfo.name,
+                bundleID = appInfo.bundleID,
                 cmd = appInfo.cmd,
                 x = cx + ox,
                 y = cy + oy,
@@ -143,6 +144,8 @@ function CircleLauncher:createCanvas()
                 if dist <= btn.radius then
                     if btn.cmd then
                         os.execute(btn.cmd .. " &")
+                    elseif btn.bundleID then
+                        hs.application.launchOrFocusByBundleID(btn.bundleID)
                     else
                         hs.application.launchOrFocus(btn.app)
                     end

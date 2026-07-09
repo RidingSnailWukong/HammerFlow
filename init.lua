@@ -378,6 +378,10 @@ screenDraw.start()
 -- 圆环启动器 (Cmd+Shift+Space 唤起)
 require("modules.circle_launcher")
 
+-- 快捷面板：待办 & 快速粘贴 (菜单栏 📋 图标 / Cmd+Shift+J 唤起)
+local quickPanel = require("modules.quick_panel")
+quickPanel.start()
+
 -- 专注度提醒 (由 WorkBuddy 自动化调用)
 require("modules.focus_alert")
 

@@ -1,0 +1,7 @@
+[
+    { "label": "邮箱", "text": "your-email@example.com", "group": "常用" },
+    { "label": "手机号", "text": "13800000000", "group": "常用" },
+    { "label": "常用话术", "text": "收到，感谢反馈，我们尽快处理。", "group": "常用" },
+    { "label": "示例表A", "text": "example_table_a", "group": "数据库表名" },
+    { "label": "示例表B", "text": "example_table_b", "group": "数据库表名" }
+]

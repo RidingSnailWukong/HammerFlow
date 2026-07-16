@@ -14,7 +14,7 @@ local logger = hs.logger.new("QuickPanel", "info")
 
 -- 面板尺寸（高度按内容自适应，这里只是兜底默认值/最小高度）
 local config = {
-    width = 340,
+    width = 442,   -- 340 * 1.3，宽度增加约 30%
     minHeight = 160,
 }
 
@@ -108,10 +108,18 @@ html,body { width:100%; background:transparent; overflow:hidden;
     left:2px; top:-1px; font-weight:bold; }
 .todo .txt { flex:1; cursor:pointer; word-break:break-all; }
 .todo.done .txt { color:rgba(255,255,255,0.35); text-decoration:line-through; }
+.todo .date { flex:0 0 auto; color:rgba(255,255,255,0.28); font-size:10.5px;
+    margin:0 6px 0 8px; white-space:nowrap; cursor:pointer; }
 .todo .del { color:rgba(255,255,255,0.25); cursor:pointer; padding:0 4px; font-size:14px; opacity:0; }
 .todo:hover .del { opacity:1; }
 .todo .del:hover { color:#e06c6c; }
 .empty { color:rgba(255,255,255,0.25); font-size:12px; text-align:center; padding:12px 0; }
+
+.done-toggle { font-size:11.5px; color:rgba(255,255,255,0.35); cursor:pointer;
+    padding:6px 4px 2px; margin-top:2px; display:flex; align-items:center; gap:5px; user-select:none; }
+.done-toggle:hover { color:rgba(255,255,255,0.6); }
+.done-toggle .arrow { font-size:9px; display:inline-block; width:8px; }
+.done-list .todo { opacity:0.85; }
 
 .divider { height:1px; background:rgba(255,255,255,0.08); margin:8px 0 10px; }
 
@@ -182,16 +190,52 @@ function isIMEComposing(e, inp){
     return !!(e.isComposing || e.keyCode === 229 || (inp && inp._imeComposing));
 }
 
+function formatTodoDate(s){
+    if(!s) return '';
+    // createdAt 存的是 "YYYY-MM-DD HH:MM"，面板只展示月-日，hover 可看完整时间
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? (m[2]+'-'+m[3]) : '';
+}
+var doneCollapsed = true;  // 默认折叠已完成事项，避免列表越来越长
+function renderTodoItem(t){
+    var d = formatTodoDate(t.createdAt);
+    return '<div class="todo '+(t.done?'done':'')+'">'
+        + '<div class="dot" onclick="toggleTodo('+t.id+')"></div>'
+        + '<div class="txt" onclick="toggleTodo('+t.id+')">'+esc(t.text)+'</div>'
+        + (d ? '<div class="date" title="'+esc(t.createdAt)+'">'+d+'</div>' : '')
+        + '<div class="del" onclick="delTodo('+t.id+')">×</div></div>';
+}
 function renderTodos(){
     var el = document.getElementById('todoList');
     if(!TODOS.length){ el.innerHTML = '<div class="empty">暂无待办</div>'; return; }
-    var sorted = TODOS.slice().sort(function(a,b){ return (a.done?1:0)-(b.done?1:0); });
-    el.innerHTML = sorted.map(function(t){
-        return '<div class="todo '+(t.done?'done':'')+'">'
-            + '<div class="dot" onclick="toggleTodo('+t.id+')"></div>'
-            + '<div class="txt" onclick="toggleTodo('+t.id+')">'+esc(t.text)+'</div>'
-            + '<div class="del" onclick="delTodo('+t.id+')">×</div></div>';
-    }).join('');
+    var active = TODOS.filter(function(t){ return !t.done; })
+        .sort(function(a,b){ return (b.id||0) - (a.id||0); });
+    var done = TODOS.filter(function(t){ return t.done; })
+        .sort(function(a,b){ return (b.id||0) - (a.id||0); });
+
+    var html = active.length
+        ? active.map(renderTodoItem).join('')
+        : '<div class="empty">暂无待办</div>';
+
+    if(done.length){
+        html += '<div class="done-toggle" id="doneToggle">'
+            + '<span class="arrow">'+(doneCollapsed ? '▸' : '▾')+'</span>'
+            + '<span>已完成 ('+done.length+')</span></div>'
+            + '<div class="done-list" id="doneList" style="display:'+(doneCollapsed ? 'none' : 'block')+';">'
+            + done.map(renderTodoItem).join('') + '</div>';
+    }
+    el.innerHTML = html;
+
+    var toggleEl = document.getElementById('doneToggle');
+    if(toggleEl){
+        toggleEl.onclick = function(){
+            doneCollapsed = !doneCollapsed;
+            var list = document.getElementById('doneList');
+            list.style.display = doneCollapsed ? 'none' : 'block';
+            toggleEl.querySelector('.arrow').textContent = doneCollapsed ? '▸' : '▾';
+            reportHeight();
+        };
+    }
 }
 function renderSnips(){
     var el = document.getElementById('snipGroups');
@@ -386,7 +430,7 @@ local function handleMessage(msg)
     local action = body.action
 
     if action == "addTodo" then
-        table.insert(todos, { id = nextTodoId, text = body.text, done = false })
+        table.insert(todos, { id = nextTodoId, text = body.text, done = false, createdAt = os.date("%Y-%m-%d %H:%M") })
         nextTodoId = nextTodoId + 1
         saveTodos()
         if panel then panel:html(renderHTML()) end
@@ -516,8 +560,11 @@ function M.stop()
     logger.i("快捷面板模块已停止")
 end
 
--- 可选：绑定全局快捷键唤起（Cmd+Shift+J）
+-- 可选：绑定全局快捷键唤起（Cmd+Shift+J / Ctrl+Home）
 hs.hotkey.bind({"cmd", "shift"}, "j", function()
+    togglePanel()
+end)
+hs.hotkey.bind({"ctrl"}, "home", function()
     togglePanel()
 end)
 

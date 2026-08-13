@@ -108,6 +108,9 @@ html,body { width:100%; background:transparent; overflow:hidden;
     left:2px; top:-1px; font-weight:bold; }
 .todo .txt { flex:1; cursor:pointer; word-break:break-all; }
 .todo.done .txt { color:rgba(255,255,255,0.35); text-decoration:line-through; }
+.todo .edit-input { flex:1; background:rgba(255,255,255,0.1); border:1px solid rgba(77,182,164,0.4);
+    border-radius:6px; padding:3px 7px; color:#fff; font-size:13px; outline:none;
+    font-family:inherit; margin-right:6px; }
 .todo .date { flex:0 0 auto; color:rgba(255,255,255,0.28); font-size:10.5px;
     margin:0 6px 0 8px; white-space:nowrap; cursor:pointer; }
 .todo .del { color:rgba(255,255,255,0.25); cursor:pointer; padding:0 4px; font-size:14px; opacity:0; }
@@ -201,9 +204,42 @@ function renderTodoItem(t){
     var d = formatTodoDate(t.createdAt);
     return '<div class="todo '+(t.done?'done':'')+'">'
         + '<div class="dot" onclick="toggleTodo('+t.id+')"></div>'
-        + '<div class="txt" onclick="toggleTodo('+t.id+')">'+esc(t.text)+'</div>'
+        + '<div class="txt" ondblclick="startEditTodo(event,'+t.id+')">'+esc(t.text)+'</div>'
         + (d ? '<div class="date" title="'+esc(t.createdAt)+'">'+d+'</div>' : '')
         + '<div class="del" onclick="delTodo('+t.id+')">×</div></div>';
+}
+// 双击待办文字进入行内编辑（单击不再触发完成/未完成，避免双击时误触发两次切换）
+function startEditTodo(ev, id){
+    ev.stopPropagation();
+    var t = TODOS.find(function(x){ return x.id === id; });
+    if(!t) return;
+    var txtEl = ev.currentTarget;
+    var input = document.createElement('input');
+    input.className = 'edit-input';
+    input.value = t.text;
+    bindIMEAwareInput(input);
+    txtEl.replaceWith(input);
+    input.focus();
+    input.select();
+    var finished = false;
+    function finish(commit){
+        if(finished) return;
+        finished = true;
+        var val = input.value.trim();
+        if(commit && val && val !== t.text){
+            send({action:'editTodo', id:id, text:val});
+        } else {
+            renderTodos();
+        }
+    }
+    input.addEventListener('keydown', function(e){
+        if(isIMEComposing(e, input)) return;
+        if(e.key === 'Enter'){ e.preventDefault(); finish(true); }
+        if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', function(){ finish(true); });
+    input.addEventListener('click', function(e){ e.stopPropagation(); });
+    input.addEventListener('dblclick', function(e){ e.stopPropagation(); });
 }
 function renderTodos(){
     var el = document.getElementById('todoList');
@@ -432,6 +468,17 @@ local function handleMessage(msg)
     if action == "addTodo" then
         table.insert(todos, { id = nextTodoId, text = body.text, done = false, createdAt = os.date("%Y-%m-%d %H:%M") })
         nextTodoId = nextTodoId + 1
+        saveTodos()
+        if panel then panel:html(renderHTML()) end
+
+    elseif action == "editTodo" then
+        for _, t in ipairs(todos) do
+            if t.id == body.id then
+                local newText = tostring(body.text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+                if newText ~= "" then t.text = newText end
+                break
+            end
+        end
         saveTodos()
         if panel then panel:html(renderHTML()) end
 

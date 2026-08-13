@@ -389,6 +389,10 @@ require("modules.focus_alert")
 local audioManager = require("modules.audio_manager")
 audioManager.start()
 
+-- Chrome 呼出/隐藏 (Ctrl+K 切换)
+local chromeToggle = require("modules.chrome_toggle")
+chromeToggle.start()
+
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
 
 -- 调试工具

@@ -87,12 +87,27 @@ local function renderHTML()
 * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; }
 html,body { width:100%; background:transparent; overflow:hidden;
     font-family:-apple-system,"PingFang SC",sans-serif; }
-.panel { width:100%; background:rgba(28,28,34,0.97);
-    border-radius:14px; padding:14px; display:flex; flex-direction:column; color:#e8e8ec; }
+.panel { position:relative; width:100%;
+    background:linear-gradient(180deg, rgba(74,74,80,0.92) 0%, rgba(56,56,62,0.92) 100%);
+    border-radius:24px; padding:18px; display:flex; flex-direction:column; color:#ececf0;
+    border:1px solid rgba(255,255,255,0.18);
+    -webkit-backdrop-filter:blur(32px) saturate(150%);
+    backdrop-filter:blur(32px) saturate(150%);
+    box-shadow:
+        0 14px 36px rgba(0,0,0,0.22),
+        0 2px 8px rgba(0,0,0,0.10),
+        inset 0 1px 0 rgba(255,255,255,0.28),
+        inset 0 -1px 0 rgba(255,255,255,0.06); }
+.panel::before { content:""; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0; opacity:0.35;
+    background:
+        radial-gradient(120% 60% at 18% 0%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 55%),
+        radial-gradient(90% 50% at 85% 100%, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 60%); }
+.panel > * { position:relative; z-index:1; }
 .sec-title { font-size:12px; color:rgba(255,255,255,0.45); font-weight:600;
     letter-spacing:0.5px; margin:2px 0 8px; display:flex; justify-content:space-between; align-items:center; }
-.sec-title .add { color:#4db6a4; cursor:pointer; font-size:16px; line-height:1; padding:0 4px; }
-.sec-title .add:hover { color:#63d6c0; }
+.sec-title .add { color:#4da3ff; cursor:pointer; font-size:16px; line-height:1; padding:0 4px; }
+.sec-title .add:hover { color:#7db8ff; }
 
 .todo-input { width:100%; background:rgba(255,255,255,0.08); border:none; border-radius:8px;
     padding:8px 10px; color:#fff; font-size:13px; margin-bottom:8px; outline:none; }
@@ -103,12 +118,12 @@ html,body { width:100%; background:transparent; overflow:hidden;
 .todo:hover { background:rgba(255,255,255,0.05); }
 .todo .dot { width:15px; height:15px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.35);
     margin-right:9px; cursor:pointer; flex:0 0 auto; }
-.todo.done .dot { background:#4db6a4; border-color:#4db6a4; position:relative; }
-.todo.done .dot::after { content:"✓"; color:#1c1c22; font-size:10px; position:absolute;
+.todo.done .dot { background:#4da3ff; border-color:#4da3ff; position:relative; }
+.todo.done .dot::after { content:"✓"; color:#ffffff; font-size:10px; position:absolute;
     left:2px; top:-1px; font-weight:bold; }
 .todo .txt { flex:1; cursor:pointer; word-break:break-all; }
 .todo.done .txt { color:rgba(255,255,255,0.35); text-decoration:line-through; }
-.todo .edit-input { flex:1; background:rgba(255,255,255,0.1); border:1px solid rgba(77,182,164,0.4);
+.todo .edit-input { flex:1; background:rgba(255,255,255,0.1); border:1px solid rgba(77,163,255,0.4);
     border-radius:6px; padding:3px 7px; color:#fff; font-size:13px; outline:none;
     font-family:inherit; margin-right:6px; }
 .todo .date { flex:0 0 auto; color:rgba(255,255,255,0.28); font-size:10.5px;
@@ -133,8 +148,8 @@ html,body { width:100%; background:transparent; overflow:hidden;
 .snip-input::placeholder { color:rgba(255,255,255,0.3); }
 .snip-form-actions { display:flex; justify-content:flex-end; gap:8px; }
 .snip-form-btn { font-size:12px; padding:4px 12px; border-radius:6px; cursor:pointer; }
-.snip-form-btn.confirm { background:#4db6a4; color:#0e2622; font-weight:600; }
-.snip-form-btn.confirm:hover { background:#63d6c0; }
+.snip-form-btn.confirm { background:#4da3ff; color:#0a1e3d; font-weight:600; }
+.snip-form-btn.confirm:hover { background:#7db8ff; }
 .snip-form-btn.cancel { color:rgba(255,255,255,0.4); }
 .snip-form-btn.cancel:hover { color:rgba(255,255,255,0.65); }
 
@@ -142,17 +157,17 @@ html,body { width:100%; background:transparent; overflow:hidden;
 .snip-group-name { font-size:11px; color:rgba(255,255,255,0.32); font-weight:600;
     margin-bottom:5px; padding-left:1px; }
 .snip-list { display:flex; flex-wrap:wrap; gap:7px; align-content:flex-start; }
-.snip { background:rgba(77,182,164,0.15); border:1px solid rgba(77,182,164,0.3);
-    color:#7fe0cf; border-radius:8px; padding:6px 12px; font-size:12.5px; cursor:pointer;
-    position:relative; max-width:100%; }
-.snip:hover { background:rgba(77,182,164,0.28); }
+.snip { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);
+    color:rgba(255,255,255,0.82); border-radius:999px; padding:6px 13px; font-size:12.5px; cursor:pointer;
+    position:relative; max-width:100%; transition:background 0.12s ease, border-color 0.12s ease; }
+.snip:hover { background:rgba(255,255,255,0.16); border-color:rgba(255,255,255,0.22); color:#fff; }
 .snip:active { transform:scale(0.96); }
 .snip .sdel { position:absolute; top:-6px; right:-6px; width:16px; height:16px; border-radius:50%;
     background:#e06c6c; color:#fff; font-size:11px; line-height:16px; text-align:center;
     display:none; }
 .snip:hover .sdel { display:block; }
 .toast { position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
-    background:rgba(77,182,164,0.95); color:#fff; padding:5px 14px; border-radius:8px;
+    background:rgba(77,163,255,0.95); color:#fff; padding:5px 14px; border-radius:8px;
     font-size:12px; opacity:0; transition:opacity 0.2s; pointer-events:none; }
 .toast.show { opacity:1; }
 </style></head>
@@ -582,6 +597,9 @@ end
 local function togglePanel()
     if isVisible then hidePanel() else showPanel() end
 end
+
+-- 暴露给外部调用（调试/脚本化触发）
+M.toggle = togglePanel
 
 ------------------------------------------------------------
 -- 启动 / 停止

@@ -393,6 +393,10 @@ audioManager.start()
 local chromeToggle = require("modules.chrome_toggle")
 chromeToggle.start()
 
+-- 日历面板：农历/节气/待办 (菜单栏日期图标 / Ctrl+R 唤起)
+local calendarPanel = require("modules.calendar_panel")
+calendarPanel.start()
+
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
 
 -- 调试工具

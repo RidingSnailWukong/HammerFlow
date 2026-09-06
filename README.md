@@ -17,6 +17,7 @@
 | **屏幕画笔** | 全屏绘图标注（自由画/矩形/圆形/椭圆/箭头 + 渐隐消失） | `Ctrl+Shift+D` |
 | **专注度提醒** | 外部自动化调用的专注力提醒弹窗 | CLI 调用 |
 | **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
+| **蓝牙翻页器改造** | 把翻页器按键映射为回车/换行/取消，脱离键盘操作对话式 App | `Ctrl+Alt+Cmd+P` 探测<br>`Ctrl+Alt+Cmd+O` 启停 |
 
 ## 📦 安装
 
@@ -120,6 +121,48 @@ vim ~/.hammerspoon/config/snippets.json
 - `text`: 点击后写入剪贴板并粘贴到当前输入框的实际内容
 - `group`: 所属分组，面板按分组分块展示；分组显示顺序按文件中该分组第一次出现的位置决定。也可以直接在面板"快速粘贴"标题旁的 ＋ 里新增，填入新分组名即可自动创建分组
 
+### `page_turner.json` — 蓝牙翻页器按键映射
+
+蓝牙翻页器本质是 HID 键盘设备，本模块拦截其按键并重映射为回车 / 换行 / 取消，
+用于在 WorkBuddy、CodeBuddy 等对话式 App 中脱离键盘操作。
+
+```json
+{
+  "enabled": false,
+  "restrictToTargetApps": true,
+  "targetApps": ["com.tencent.workbuddy.mac", "com.tencent.codebuddycn"],
+  "bindings": {
+    "121": { "action": "send",    "label": "回车 / 发送" },
+    "116": { "action": "cancel",  "label": "取消 / 停止" },
+    "119": { "action": "newline", "label": "换行" }
+  },
+  "systemBindings": {}
+}
+```
+
+使用步骤：
+
+1. 连接翻页器 → 菜单栏 **📕** → 「开始探测按键」，逐个按下翻页器按键，屏幕显示 `keyCode` 与 `deviceType`
+2. 把键码填入 `bindings`（键名必须是字符串）
+3. 菜单栏点击第一项启用映射
+
+可用 `action`：`send`（回车/发送）、`newline`（换行）、`cancel`（取消/停止）、
+`submitCmd`（Cmd+回车）、`newChat`（新建对话）；也可自定义
+`{ "mods": ["cmd","shift"], "key": "k" }`。
+
+若翻页器发的是音量键（而非普通按键），填入 `systemBindings`，可用值
+`SOUND_UP` / `SOUND_DOWN` / `PLAY` / `NEXT` / `PREVIOUS`。
+
+> ⚠️ `targetApps` 必须填 **bundleID**。macOS 的 App 名称是本地化的
+> （TextEdit 实际返回「文本编辑」），填名称会静默匹配失败。
+> 不确定时切到目标 App，用菜单栏「把当前前台 App 加入白名单」自动写入。
+
+> ⚠️ 不建议映射方向键（`123`-`126`），输入框里需要用它们编辑文本。
+
+> 💡 若翻页器与内置键盘发送相同键码且需要区分设备，探测时记下翻页器的
+> `deviceType` 数值并加上 `"deviceType": <数值>` 字段。若两者 type 相同，
+> Hammerspoon 无法区分，需改用 Karabiner-Elements（可按 vendor/product ID 过滤）。
+
 ## 📁 项目结构
 
 ```
@@ -132,7 +175,8 @@ HammerFlow/
 │   ├── pomodoro.lua                # 番茄钟
 │   ├── screen_draw.lua             # 屏幕画笔
 │   ├── focus_alert.lua             # 专注度提醒
-│   └── notch_avoidance.lua         # 刘海避让
+│   ├── notch_avoidance.lua         # 刘海避让
+│   └── page_turner.lua             # 蓝牙翻页器按键改造
 ├── config/                         # 个人配置（git ignored）
 │   ├── launcher_apps.json
 │   ├── audio_devices.json

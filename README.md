@@ -16,6 +16,7 @@
 | **番茄钟** | 可配置的番茄工作法计时器 | 菜单栏点击 |
 | **屏幕画笔** | 全屏绘图标注（自由画/矩形/圆形/椭圆/箭头 + 渐隐消失） | `Ctrl+Shift+D` |
 | **专注度提醒** | 外部自动化调用的专注力提醒弹窗 | CLI 调用 |
+| **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
 
 ## 📦 安装
 
@@ -130,7 +131,8 @@ HammerFlow/
 │   ├── quick_panel.lua             # 快捷面板（TODO + 快速粘贴）
 │   ├── pomodoro.lua                # 番茄钟
 │   ├── screen_draw.lua             # 屏幕画笔
-│   └── focus_alert.lua             # 专注度提醒
+│   ├── focus_alert.lua             # 专注度提醒
+│   └── notch_avoidance.lua         # 刘海避让
 ├── config/                         # 个人配置（git ignored）
 │   ├── launcher_apps.json
 │   ├── audio_devices.json

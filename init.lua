@@ -397,7 +397,27 @@ chromeToggle.start()
 local calendarPanel = require("modules.calendar_panel")
 calendarPanel.start()
 
+-- 刘海避让（本地自定义模块，上游 HammerFlow 不含此功能）
+local notchAvoidance = require("modules.notch_avoidance")
+notchAvoidance.start()
+
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
+
+-- ================= 刘海避让快捷键 =================
+-- Ctrl+Cmd+N: 刷新刘海避让配置
+-- 作用：重新检测刘海区域，适用于切换显示器或调整屏幕设置后
+-- 使用场景：外接显示器后切换回内置屏幕时，手动刷新检测
+hs.hotkey.bind({"ctrl", "cmd"}, "N", function()
+    notchAvoidance.update()
+    hs.alert.show("刘海避让已刷新")
+end)
+
+-- Ctrl+Cmd+Shift+N: 可视化显示刘海区域（调试用）
+-- 作用：在屏幕上用红色半透明矩形标记刘海位置，持续 3 秒
+-- 使用场景：验证刘海检测是否准确，查看刘海具体位置和宽度
+hs.hotkey.bind({"ctrl", "cmd", "shift"}, "N", function()
+    notchAvoidance.visualize()
+end)
 
 -- 调试工具
 function hs.dumpSpaces()
@@ -427,4 +447,22 @@ function hs.dumpSpaces()
             print(string.format("  %d: ID %d (%s)%s%s", i, id, hs.spaces.spaceType(id), alias, marker))
         end
     end
+end
+
+-- 刘海信息调试
+function hs.dumpNotch()
+    local info = notchAvoidance.getInfo()
+    print("=== Notch Debug Info ===")
+    print("Has Notch:", info.hasNotch)
+    print("Notch Width:", info.width, "pt")
+    print("Left Safe Zone:", info.leftSafeZone)
+    print("Right Safe Zone:", info.rightSafeZone)
+    print("Screen:", info.screen and info.screen:name() or "nil")
+    print("")
+    print("测试坐标是否在刘海区域：")
+    local screen = hs.screen.mainScreen()
+    local frame = screen:frame()
+    local centerX = frame.x + frame.w / 2
+    print(string.format("  屏幕中心 (%.0f): %s", centerX,
+        notchAvoidance.isInNotchZone(centerX) and "在刘海内" or "安全区域"))
 end

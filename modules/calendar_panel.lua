@@ -11,6 +11,7 @@ local M = {}
 local configDir = hs.configdir
 local todosFile = configDir .. "/config/todos.json"
 local calendarFile = configDir .. "/config/calendar.json"
+local eventsFile = configDir .. "/config/calendar_events.json"
 local logger = hs.logger.new("CalendarPanel", "info")
 
 -- 面板尺寸（高度按内容自适应，这里只是兜底默认值/最小高度）
@@ -67,11 +68,16 @@ local function loadTodos()
     return readJSON(todosFile, {})
 end
 
+local function loadEvents()
+    return readJSON(eventsFile, {})
+end
+
 ------------------------------------------------------------
 -- HTML 渲染
 ------------------------------------------------------------
 local function renderHTML()
     local todosJson = hs.json.encode(loadTodos())
+    local eventsJson = hs.json.encode(loadEvents())
 
     local head = [[
 <!DOCTYPE html>
@@ -178,6 +184,7 @@ html,body { width:100%; background:transparent; overflow:hidden;
 
     local script = [[
 var TODOS = ]] .. todosJson .. [[;
+var EVENTS = ]] .. eventsJson .. [[;
 var ALPHA = ]] .. string.format("%.2f", alpha) .. [[;
 function send(obj){ try{ webkit.messageHandlers.CalendarPanel.postMessage(obj); }catch(e){} }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -276,6 +283,16 @@ function todosOf(ds){
     return list;
 }
 
+function eventsOf(ds){
+    var list=EVENTS.filter(function(e){
+        return e.date && String(e.date)===ds;
+    });
+    list.sort(function(a,b){
+        return ((a.done?1:0)-(b.done?1:0)) || String(a.time||'99:99').localeCompare(String(b.time||'99:99'));
+    });
+    return list;
+}
+
 function render(){
     var y=view.y, m=view.m;
     document.getElementById("monthTitle").textContent=y+"年"+m+"月";
@@ -306,7 +323,7 @@ function render(){
         var inRange=(cy>=1900&&cy<=2100);
         var lbl=inRange?cellLabel(cy,cm,cd,lunarFromSolar(cy,cm,cd)):{t:"",cls:""};
         var ds=dateStr(cy,cm,cd);
-        var hasTodo=todosOf(ds).length>0;
+        var hasTodo=(todosOf(ds).length>0) || (eventsOf(ds).length>0);
 
         var cls="cell"+(cur?"":" other");
         if(ds===todayStr) cls+=" today";
@@ -334,17 +351,34 @@ function render(){
 function renderDetail(){
     var el=document.getElementById("detail");
     if(!selDate){ el.style.display="none"; el.innerHTML=""; return; }
-    var list=todosOf(selDate);
-    var html='<div class="dtitle">'+selDate+' 待办 ('+list.length+')</div>';
-    if(!list.length){
-        html+='<div class="dempty">当天没有待办</div>';
-    } else {
-        for(var i=0;i<list.length;i++){
-            var t=list[i];
+    var todos=todosOf(selDate);
+    var events=eventsOf(selDate);
+    var html='';
+
+    // 日程（未来会议/任务，带时间）
+    if(events.length){
+        html+='<div class="dtitle">'+selDate+' 日程 ('+events.length+')</div>';
+        for(var i=0;i<events.length;i++){
+            var e=events[i];
+            html+='<div class="dtodo'+(e.done?' done':'')+'">'
+                +'<div class="dot"></div>'
+                +'<div class="txt">'+(e.time?esc(e.time)+' ':'')+esc(e.text)+'</div></div>';
+        }
+    }
+
+    // 待办（当天 createdAt 归属）
+    if(todos.length){
+        html+='<div class="dtitle"'+(events.length?' style="margin-top:10px"':'')+'>'+selDate+' 待办 ('+todos.length+')</div>';
+        for(var j=0;j<todos.length;j++){
+            var t=todos[j];
             html+='<div class="dtodo'+(t.done?' done':'')+'">'
                 +'<div class="dot"></div>'
                 +'<div class="txt">'+esc(t.text)+'</div></div>';
         }
+    }
+
+    if(!events.length && !todos.length){
+        html+='<div class="dempty">当天没有日程或待办</div>';
     }
     el.innerHTML=html;
     el.style.display="block";

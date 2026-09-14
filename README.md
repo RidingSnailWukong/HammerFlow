@@ -17,7 +17,6 @@
 | **屏幕画笔** | 全屏绘图标注（自由画/矩形/圆形/椭圆/箭头 + 渐隐消失） | `Ctrl+Shift+D` |
 | **专注度提醒** | 外部自动化调用的专注力提醒弹窗 | CLI 调用 |
 | **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
-| **翻页器按键（Karabiner）** | 蓝牙翻页器三键映射为语音输入 / 发送 / 停止，脱离键盘操作对话式 App。**配置在 Karabiner-Elements，不在本仓库**（见下方说明） | 翻页器 `□` / `>` / `<` |
 | **Chrome 窗口循环** | 跨显示器循环切换 Chrome 窗口（系统 `Cmd+\`` 不支持跨屏/跨桌面） | `` Ctrl+` `` 下一个<br>`` Ctrl+Shift+` `` 上一个<br>`Ctrl+K` 呼出/隐藏 |
 
 ## 📦 安装
@@ -121,30 +120,6 @@ vim ~/.hammerspoon/config/snippets.json
 - `label`: 按钮上显示的名称
 - `text`: 点击后写入剪贴板并粘贴到当前输入框的实际内容
 - `group`: 所属分组，面板按分组分块展示；分组显示顺序按文件中该分组第一次出现的位置决定。也可以直接在面板"快速粘贴"标题旁的 ＋ 里新增，填入新分组名即可自动创建分组
-
-### 蓝牙翻页器按键（Karabiner-Elements）
-
-翻页器按键映射**不在本仓库**，由 [Karabiner-Elements](https://karabiner-elements.pqrs.org/)
-配置实现，配置文件为 `~/.config/karabiner/karabiner.json`。
-
-> **为什么不用 Hammerspoon？** 微信输入法（WeType）在 HID 层监听快捷键，并校验
-> `eventSourceUnixProcessID` 判定事件是否由程序注入：真实键盘为 `0`，Hammerspoon
-> 合成的 CGEvent 为进程号且**内核强制填充、无法伪造**，会被直接 bypass
-> （现象是不触发语音、反而打出 `π`）。Karabiner 通过 DriverKit 虚拟键盘在
-> **HID 层**注入（对输入法等同真实键盘），是唯一可行路径。
-
-当前映射：
-
-| 翻页器键 | 原始键 | 映射为 | 效果 |
-|---|---|---|---|
-| `□` | Tab | 左 Option + P | 🎤 微信输入法语音输入 |
-| `>` | Down | Escape | ⏹ 停止 / 取消 |
-| `<` | Up | Return | ➤ 发送 |
-
-- 仅作用于翻页器（Norwii Wireless Presenter，`vendor_id=12867` / `product_id=273`），
-  主键盘完全不受影响
-- 第 4 个键（黄色激光）不发 HID 事件，无法映射
-- 修改映射：直接编辑上述 `karabiner.json`，保存后自动热重载
 
 ## 📁 项目结构
 

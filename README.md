@@ -17,7 +17,7 @@
 | **屏幕画笔** | 全屏绘图标注（自由画/矩形/圆形/椭圆/箭头 + 渐隐消失） | `Ctrl+Shift+D` |
 | **专注度提醒** | 外部自动化调用的专注力提醒弹窗 | CLI 调用 |
 | **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
-| **蓝牙翻页器改造** | 把翻页器按键映射为回车/换行/取消，脱离键盘操作对话式 App | `Ctrl+Alt+Cmd+P` 探测<br>`Ctrl+Alt+Cmd+O` 启停 |
+| **翻页器按键（Karabiner）** | 蓝牙翻页器三键映射为语音输入 / 发送 / 停止，脱离键盘操作对话式 App。**配置在 Karabiner-Elements，不在本仓库**（见下方说明） | 翻页器 `□` / `>` / `<` |
 | **Chrome 窗口循环** | 跨显示器循环切换 Chrome 窗口（系统 `Cmd+\`` 不支持跨屏/跨桌面） | `` Ctrl+` `` 下一个<br>`` Ctrl+Shift+` `` 上一个<br>`Ctrl+K` 呼出/隐藏 |
 
 ## 📦 安装
@@ -122,47 +122,29 @@ vim ~/.hammerspoon/config/snippets.json
 - `text`: 点击后写入剪贴板并粘贴到当前输入框的实际内容
 - `group`: 所属分组，面板按分组分块展示；分组显示顺序按文件中该分组第一次出现的位置决定。也可以直接在面板"快速粘贴"标题旁的 ＋ 里新增，填入新分组名即可自动创建分组
 
-### `page_turner.json` — 蓝牙翻页器按键映射
+### 蓝牙翻页器按键（Karabiner-Elements）
 
-蓝牙翻页器本质是 HID 键盘设备，本模块拦截其按键并重映射为回车 / 换行 / 取消，
-用于在 WorkBuddy、CodeBuddy 等对话式 App 中脱离键盘操作。
+翻页器按键映射**不在本仓库**，由 [Karabiner-Elements](https://karabiner-elements.pqrs.org/)
+配置实现，配置文件为 `~/.config/karabiner/karabiner.json`。
 
-```json
-{
-  "enabled": false,
-  "restrictToTargetApps": true,
-  "targetApps": ["com.tencent.workbuddy.mac", "com.tencent.codebuddycn"],
-  "bindings": {
-    "121": { "action": "send",    "label": "回车 / 发送" },
-    "116": { "action": "cancel",  "label": "取消 / 停止" },
-    "119": { "action": "newline", "label": "换行" }
-  },
-  "systemBindings": {}
-}
-```
+> **为什么不用 Hammerspoon？** 微信输入法（WeType）在 HID 层监听快捷键，并校验
+> `eventSourceUnixProcessID` 判定事件是否由程序注入：真实键盘为 `0`，Hammerspoon
+> 合成的 CGEvent 为进程号且**内核强制填充、无法伪造**，会被直接 bypass
+> （现象是不触发语音、反而打出 `π`）。Karabiner 通过 DriverKit 虚拟键盘在
+> **HID 层**注入（对输入法等同真实键盘），是唯一可行路径。
 
-使用步骤：
+当前映射：
 
-1. 连接翻页器 → 菜单栏 **📕** → 「开始探测按键」，逐个按下翻页器按键，屏幕显示 `keyCode` 与 `deviceType`
-2. 把键码填入 `bindings`（键名必须是字符串）
-3. 菜单栏点击第一项启用映射
+| 翻页器键 | 原始键 | 映射为 | 效果 |
+|---|---|---|---|
+| `□` | Tab | 左 Option + P | 🎤 微信输入法语音输入 |
+| `>` | Down | Escape | ⏹ 停止 / 取消 |
+| `<` | Up | Return | ➤ 发送 |
 
-可用 `action`：`send`（回车/发送）、`newline`（换行）、`cancel`（取消/停止）、
-`submitCmd`（Cmd+回车）、`newChat`（新建对话）；也可自定义
-`{ "mods": ["cmd","shift"], "key": "k" }`。
-
-若翻页器发的是音量键（而非普通按键），填入 `systemBindings`，可用值
-`SOUND_UP` / `SOUND_DOWN` / `PLAY` / `NEXT` / `PREVIOUS`。
-
-> ⚠️ `targetApps` 必须填 **bundleID**。macOS 的 App 名称是本地化的
-> （TextEdit 实际返回「文本编辑」），填名称会静默匹配失败。
-> 不确定时切到目标 App，用菜单栏「把当前前台 App 加入白名单」自动写入。
-
-> ⚠️ 不建议映射方向键（`123`-`126`），输入框里需要用它们编辑文本。
-
-> 💡 若翻页器与内置键盘发送相同键码且需要区分设备，探测时记下翻页器的
-> `deviceType` 数值并加上 `"deviceType": <数值>` 字段。若两者 type 相同，
-> Hammerspoon 无法区分，需改用 Karabiner-Elements（可按 vendor/product ID 过滤）。
+- 仅作用于翻页器（Norwii Wireless Presenter，`vendor_id=12867` / `product_id=273`），
+  主键盘完全不受影响
+- 第 4 个键（黄色激光）不发 HID 事件，无法映射
+- 修改映射：直接编辑上述 `karabiner.json`，保存后自动热重载
 
 ## 📁 项目结构
 
@@ -176,8 +158,7 @@ HammerFlow/
 │   ├── pomodoro.lua                # 番茄钟
 │   ├── screen_draw.lua             # 屏幕画笔
 │   ├── focus_alert.lua             # 专注度提醒
-│   ├── notch_avoidance.lua         # 刘海避让
-│   └── page_turner.lua             # 蓝牙翻页器按键改造
+│   └── notch_avoidance.lua         # 刘海避让
 ├── config/                         # 个人配置（git ignored）
 │   ├── launcher_apps.json
 │   ├── audio_devices.json

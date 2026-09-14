@@ -401,10 +401,6 @@ calendarPanel.start()
 local notchAvoidance = require("modules.notch_avoidance")
 notchAvoidance.start()
 
--- 蓝牙翻页器按键改造（菜单栏 📕/📖 图标；默认停用，需先探测按键）
-local pageTurner = require("modules.page_turner")
-pageTurner.start()
-
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
 
 -- ================= 刘海避让快捷键 =================
@@ -421,22 +417,6 @@ end)
 -- 使用场景：验证刘海检测是否准确，查看刘海具体位置和宽度
 hs.hotkey.bind({"ctrl", "cmd", "shift"}, "N", function()
     notchAvoidance.visualize()
-end)
-
--- ================= 蓝牙翻页器快捷键 =================
--- Ctrl+Alt+Cmd+P: 切换翻页器按键探测模式（按下翻页器按键即可看到键码）
-hs.hotkey.bind({"ctrl", "alt", "cmd"}, "P", function()
-    if pageTurner.isDetecting() then
-        pageTurner.stopDetect()
-        hs.alert.show("翻页器探测已停止")
-    else
-        pageTurner.startDetect(60)
-    end
-end)
-
--- Ctrl+Alt+Cmd+O: 启用/停用翻页器映射
-hs.hotkey.bind({"ctrl", "alt", "cmd"}, "O", function()
-    pageTurner.toggle()
 end)
 
 -- 调试工具

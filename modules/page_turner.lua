@@ -16,6 +16,8 @@ local M = {}
 
 local logger = hs.logger.new("PageTurner", "info")
 local configFile = hs.configdir .. "/config/page_turner.json"
+-- 探测结果落盘，便于事后查看/排查（每次开启探测会清空）
+local detectLogFile = "/tmp/page_turner_detect.log"
 
 -- 合成事件的标记值，防止自己生成的事件被再次拦截造成死循环
 local MAGIC = 0x50544E52 -- "PTNR"
@@ -28,10 +30,22 @@ local ACTIONS = {
     send      = { mods = {},                key = "return", label = "回车 / 发送" },
     newline   = { mods = { "shift" },       key = "return", label = "换行" },
     cancel    = { mods = {},                key = "escape", label = "取消 / 停止" },
+    undo      = { mods = { "cmd" },         key = "z",      label = "撤销" },
+    redo      = { mods = { "cmd", "shift" }, key = "z",     label = "重做" },
     -- 备用：部分编辑器用 Cmd+Enter 提交
     submitCmd = { mods = { "cmd" },         key = "return", label = "Cmd+回车" },
     -- 备用：新建对话
     newChat   = { mods = { "cmd", "shift" }, key = "n",     label = "新建对话" },
+}
+
+------------------------------------------------------------
+-- 特殊动作（需要合成 fn 硬件修饰键，无法用 newKeyEvent 表达）
+------------------------------------------------------------
+-- voice: 点按一次 fn，触发微信输入法语音输入
+--        （微信输入法已设置为「按一次 fn 开始接收，按其他键结束」，
+--          因此这里只需一次完整的 fn 按下+抬起，无需维持按住状态）
+local SPECIAL = {
+    voice = { label = "🎤 语音输入" },
 }
 
 ------------------------------------------------------------
@@ -53,6 +67,8 @@ local DEFAULT_CONFIG = {
     showMenubar = true,
     -- 触发时是否弹出轻提示
     showFeedback = true,
+    -- fn 点按的按下-抬起间隔（毫秒）。太短可能被输入法漏检，太长无意义
+    fnTapGapMs = 40,
     -- 普通按键映射：keyCode(字符串) -> { action = ... }
     bindings = {},
     -- 媒体键映射（部分翻页器发音量键）：SOUND_UP / SOUND_DOWN / PLAY / NEXT / PREVIOUS
@@ -85,6 +101,10 @@ end
 
 local function resolveAction(binding)
     if not binding then return nil end
+    -- 特殊有状态动作（fn 语音）
+    if binding.action and SPECIAL[binding.action] then
+        return { special = binding.action, label = SPECIAL[binding.action].label }
+    end
     -- 预设动作
     if binding.action and ACTIONS[binding.action] then
         return ACTIONS[binding.action]
@@ -123,19 +143,81 @@ local function deviceMatches(e)
 end
 
 -- 构造合成按键事件（带防循环标记）
+--
+-- 必须用 newKeyEventSequence 而不是 newKeyEvent：
+--   newKeyEvent 只产生一个「附带修饰键 flag」的孤立 keyDown，
+--   不会发出独立的 flagsChanged 事件，且 flag 只有通用位（如 alt=0x80000）。
+--   而输入法/快捷键监听器（如微信输入法 ShortcutKeyMonitor.handleFlagsChanged(keyCode:flags:)）
+--   依赖 flagsChanged 事件及其 keyCode 来判定「哪个修饰键、左还是右」，
+--   收不到就不会匹配快捷键，事件会直接透传成字符（Option+P → π）。
+--
+-- newKeyEventSequence 产生完整的物理按键序列，并自带左键设备位：
+--   flagsChanged(keyCode=58 左Option, flags=0x20080020)
+--   keyDown(p) / keyUp(p)
+--   flagsChanged(keyCode=58, flags=0x20000000)
 local function buildKeyEvents(action)
-    local down = hs.eventtap.event.newKeyEvent(action.mods, action.key, true)
-    local up = hs.eventtap.event.newKeyEvent(action.mods, action.key, false)
-    down:setProperty(hs.eventtap.event.properties.eventSourceUserData, MAGIC)
-    up:setProperty(hs.eventtap.event.properties.eventSourceUserData, MAGIC)
-    return { down, up }
+    local seq = hs.eventtap.event.newKeyEventSequence(action.mods, action.key)
+
+    -- 补齐修饰键 flag：newKeyEventSequence 生成的 keyDown/keyUp 不带修饰键位
+    -- （它认为已由 flagsChanged 声明过），但真实物理按键的 keyDown 是带 flag 的。
+    -- 不补的话应用会收到「裸键」——例如 Option+P 会退化成单独的 p。
+    local modSet = {}
+    local hasMods = false
+    for _, m in ipairs(action.mods or {}) do
+        modSet[m] = true
+        hasMods = true
+    end
+
+    local kd = hs.eventtap.event.types.keyDown
+    local ku = hs.eventtap.event.types.keyUp
+    for _, e in ipairs(seq) do
+        local t = e:getType()
+        if hasMods and (t == kd or t == ku) then
+            e:setFlags(modSet)
+        end
+        e:setProperty(hs.eventtap.event.properties.eventSourceUserData, MAGIC)
+    end
+    return seq
 end
 
-local function feedback(text)
+local function feedback(text, duration)
     if cfg.showFeedback then
         hs.alert.closeAll(0)
-        hs.alert.show(text, { radius = 12, textSize = 15 }, 0.45)
+        hs.alert.show(text, { radius = 12, textSize = 15 }, duration or 0.45)
     end
+end
+
+------------------------------------------------------------
+-- fn 修饰键合成（触发微信输入法语音输入）
+------------------------------------------------------------
+-- fn 是硬件级修饰键，hs.eventtap.event.newKeyEvent 无法表达，
+-- 必须手工构造 flagsChanged 事件并设置 keyCode=63 才能注入 CGEvent 流。
+-- 实测：合成的 fn down/up 均可被 eventtap 观测到，确认事件已进入系统事件流。
+local FN_KEYCODE = 63
+
+local function postFnFlag(down)
+    local e = hs.eventtap.event.newKeyEvent({}, "a", true)
+    e:setType(hs.eventtap.event.types.flagsChanged)
+    e:setKeyCode(FN_KEYCODE)
+    e:setFlags(down and { fn = true } or {})
+    e:setProperty(hs.eventtap.event.properties.eventSourceUserData, MAGIC)
+    e:post()
+end
+
+-- 点按一次 fn（按下 → 短暂间隔 → 抬起）
+-- 间隔是必要的：down/up 背靠背发送可能被输入法当作抖动过滤掉
+local function fnTap()
+    postFnFlag(true)
+    hs.timer.doAfter((cfg.fnTapGapMs or 40) / 1000, function()
+        postFnFlag(false)
+    end)
+    logger.i("[fn] 已点按")
+end
+
+-- 兜底：手工清除可能残留的 fn 标志（正常流程用不到）
+function M.releaseFn()
+    postFnFlag(false)
+    hs.alert.show("已清除 fn 标志", 1)
 end
 
 ------------------------------------------------------------
@@ -150,8 +232,9 @@ local function handleKeyEvent(e)
     local action = resolveAction(binding)
 
     -- keyUp：吞掉之前被映射的那个键，避免目标 App 收到孤立的 keyUp
+    -- 必须同时校验设备，否则主键盘按下同一个键时其 keyUp 会被误吞
     if etype == hs.eventtap.event.types.keyUp then
-        if swallowKeyUp[code] then
+        if swallowKeyUp[code] and deviceMatches(e) then
             swallowKeyUp[code] = nil
             return true
         end
@@ -162,9 +245,24 @@ local function handleKeyEvent(e)
     if not deviceMatches(e) then return false end
     if not isTargetAppFocused() then return false end
 
-    -- 长按连发控制
     local isRepeat = e:getProperty(hs.eventtap.event.properties.keyboardEventAutorepeat)
-    if isRepeat and isRepeat ~= 0 and not cfg.allowRepeat then
+    local repeating = (isRepeat and isRepeat ~= 0)
+
+    ---------------------------------------------------------
+    -- 特殊动作：点按 fn 触发语音输入
+    ---------------------------------------------------------
+    if action.special == "voice" then
+        if repeating then return true end -- 吞掉长按连发，避免重复触发
+        swallowKeyUp[code] = true
+        fnTap()
+        feedback("🎤 语音输入", 0.6)
+        return true
+    end
+
+    ---------------------------------------------------------
+    -- 普通动作：一次性击发 mods + key
+    ---------------------------------------------------------
+    if repeating and not cfg.allowRepeat then
         return true -- 吞掉重复事件，但不触发动作
     end
 
@@ -197,6 +295,16 @@ end
 ------------------------------------------------------------
 -- 探测模式：只记录，不拦截
 ------------------------------------------------------------
+-- 探测日志落盘：便于事后完整回看，不必依赖转瞬即逝的屏幕提示
+local function detectLog(line)
+    local f = io.open(detectLogFile, "a")
+    if f then
+        f:write(os.date("%H:%M:%S.") .. string.format("%03d", math.floor((hs.timer.secondsSinceEpoch() % 1) * 1000))
+            .. "  " .. line .. "\n")
+        f:close()
+    end
+end
+
 local function detectReport(lines)
     local text = table.concat(lines, "\n")
     print("\n===== 翻页器按键探测 =====\n" .. text .. "\n=========================")
@@ -208,34 +316,64 @@ function M.startDetect(seconds)
     seconds = seconds or 60
     M.stopDetect()
 
-    detectTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
-        if isOwnEvent(e) then return false end
-        local code = e:getKeyCode()
-        local kt = e:getProperty(hs.eventtap.event.properties.keyboardEventKeyboardType)
-        local mods = {}
-        for m, on in pairs(e:getFlags()) do
-            if on == true then table.insert(mods, m) end
+    -- 每次开启探测清空日志，避免多次探测结果混淆
+    local f = io.open(detectLogFile, "w")
+    if f then
+        f:write("===== 翻页器按键探测 " .. os.date("%Y-%m-%d %H:%M:%S") .. " =====\n")
+        f:close()
+    end
+
+    detectTap = hs.eventtap.new(
+        { hs.eventtap.event.types.keyDown, hs.eventtap.event.types.keyUp },
+        function(e)
+            if isOwnEvent(e) then return false end
+            local isDown = (e:getType() == hs.eventtap.event.types.keyDown)
+            local code = e:getKeyCode()
+            local kt = e:getProperty(hs.eventtap.event.properties.keyboardEventKeyboardType)
+            local rep = e:getProperty(hs.eventtap.event.properties.keyboardEventAutorepeat)
+            local mods = {}
+            for m, on in pairs(e:getFlags()) do
+                if on == true then table.insert(mods, m) end
+            end
+            local app = hs.application.frontmostApplication()
+
+            -- 完整记录 down 与 up，用于判断设备是否发出成对事件
+            detectLog(string.format(
+                "%-7s keyCode=%-4d keyName=%-12s deviceType=%-6s repeat=%-3s mods=%-12s app=%s",
+                isDown and "[DOWN]" or "[UP]",
+                code, keyName(code), tostring(kt),
+                tostring(rep or 0),
+                (#mods > 0 and table.concat(mods, "+") or "-"),
+                (app and tostring(app:bundleID()) or "?")
+            ))
+
+            -- 屏幕提示只在按下时弹，避免刷屏
+            if isDown then
+                detectReport({
+                    "键码 keyCode: " .. tostring(code),
+                    "键名: " .. keyName(code),
+                    "设备 deviceType: " .. tostring(kt),
+                    "修饰键: " .. (#mods > 0 and table.concat(mods, "+") or "无"),
+                    "前台 App bundleID: " .. (app and tostring(app:bundleID()) or "未知"),
+                })
+            end
+            return false
         end
-        local app = hs.application.frontmostApplication()
-        detectReport({
-            "键码 keyCode: " .. tostring(code),
-            "键名: " .. keyName(code),
-            "设备 deviceType: " .. tostring(kt),
-            "修饰键: " .. (#mods > 0 and table.concat(mods, "+") or "无"),
-            "前台 App bundleID: " .. (app and tostring(app:bundleID()) or "未知"),
-        })
-        return false
-    end)
+    )
     detectTap:start()
 
     detectSysTap = hs.eventtap.new({ hs.eventtap.event.types.systemDefined }, function(e)
         if isOwnEvent(e) then return false end
         local data = e:systemKey()
-        if data and data.key and data.down then
-            detectReport({
-                "媒体键 systemKey: " .. tostring(data.key),
-                "（填入 systemBindings）",
-            })
+        if data and data.key then
+            detectLog(string.format("[SYS]   systemKey=%s down=%s repeat=%s",
+                tostring(data.key), tostring(data.down), tostring(data.repeatKey)))
+            if data.down then
+                detectReport({
+                    "媒体键 systemKey: " .. tostring(data.key),
+                    "（填入 systemBindings）",
+                })
+            end
         end
         return false
     end)

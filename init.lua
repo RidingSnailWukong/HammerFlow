@@ -401,6 +401,10 @@ calendarPanel.start()
 local notchAvoidance = require("modules.notch_avoidance")
 notchAvoidance.start()
 
+-- 6 键 USB 宏键盘（deviceType=40；按设备隔离，不影响主键盘）
+local macroKeypad = require("modules.macro_keypad")
+macroKeypad.start()
+
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
 
 -- ================= 刘海避让快捷键 =================

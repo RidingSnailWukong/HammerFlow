@@ -18,6 +18,7 @@
 | **专注度提醒** | 外部自动化调用的专注力提醒弹窗 | CLI 调用 |
 | **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
 | **Chrome 窗口循环** | 跨显示器循环切换 Chrome 窗口（系统 `Cmd+\`` 不支持跨屏/跨桌面） | `` Ctrl+` `` 下一个<br>`` Ctrl+Shift+` `` 上一个<br>`Ctrl+K` 呼出/隐藏 |
+| **6 键宏键盘** | 按设备隔离，把外接宏键盘重映射为 macOS 快捷键、应用启动和桌面切换 | 外接设备物理键 |
 
 ## 📦 安装
 
@@ -44,6 +45,7 @@ vim ~/.hammerspoon/config/audio_devices.json
 vim ~/.hammerspoon/config/space_names.json
 vim ~/.hammerspoon/config/todos.json
 vim ~/.hammerspoon/config/snippets.json
+vim ~/.hammerspoon/config/macro_keypad.json
 
 # 5. 启动/重载 Hammerspoon
 ```
@@ -121,6 +123,45 @@ vim ~/.hammerspoon/config/snippets.json
 - `text`: 点击后写入剪贴板并粘贴到当前输入框的实际内容
 - `group`: 所属分组，面板按分组分块展示；分组显示顺序按文件中该分组第一次出现的位置决定。也可以直接在面板"快速粘贴"标题旁的 ＋ 里新增，填入新分组名即可自动创建分组
 
+### `macro_keypad.json` — 6 键 USB 宏键盘
+
+当前设备实测为 VID `0x413D` / PID `0x553A`，Hammerspoon `keyboardType=40`；主键盘为 `keyboardType=91`，因此可以只拦截宏键盘，不影响主键盘上的同名组合键。
+
+```json
+{
+  "enabled": true,
+  "deviceType": 40,
+  "strictModifiers": true,
+  "doubleClickInterval": 0.4,
+  "bindings": {
+    "8": {
+      "sourceMods": ["ctrl"],
+      "label": "复制",
+      "action": { "type": "keystroke", "mods": ["cmd"], "key": "c" }
+    },
+    "9": {
+      "sourceMods": ["ctrl"],
+      "immediateSingle": true,
+      "doubleClickInterval": 0.4,
+      "pendingHint": "0.4 秒内再按一次：打开微信",
+      "singleAction": { "type": "launchApp", "bundleID": "com.tencent.WeWorkMac" },
+      "doubleAction": { "type": "launchApp", "bundleID": "com.tencent.xinWeChat" }
+    }
+  }
+}
+```
+
+支持以下动作：
+
+- `keystroke`：发送 macOS 组合键，如 `Cmd+C`、`Cmd+V`
+- `launchApp`：按 Bundle ID 启动或聚焦 App
+- `toggleApp`：App 在前台时隐藏，否则启动或聚焦
+- `cycleAppMenuWindow`：通过指定 App 的“窗口”菜单循环切换窗口，可覆盖其他 macOS 桌面中的窗口
+- `switchDesktop`：按 `direction: "left"` 或 `"right"` 切换到相邻桌面，边界处不循环
+- 单击/双击：默认延迟单击；设置 `immediateSingle=true` 后首次立即执行，窗口内再次按下执行双击动作
+
+模块精确匹配 `deviceType + keyCode + sourceMods`，吞掉宏键盘原始 Ctrl/Fn 事件，再注入目标事件；合成事件带防递归标记。配置保存后自动热重载。
+
 ## 📁 项目结构
 
 ```
@@ -133,19 +174,22 @@ HammerFlow/
 │   ├── pomodoro.lua                # 番茄钟
 │   ├── screen_draw.lua             # 屏幕画笔
 │   ├── focus_alert.lua             # 专注度提醒
-│   └── notch_avoidance.lua         # 刘海避让
+│   ├── notch_avoidance.lua         # 刘海避让
+│   └── macro_keypad.lua            # 6 键 USB 宏键盘映射
 ├── config/                         # 个人配置（git ignored）
 │   ├── launcher_apps.json
 │   ├── audio_devices.json
 │   ├── space_names.json
 │   ├── todos.json
-│   └── snippets.json
+│   ├── snippets.json
+│   └── macro_keypad.json
 ├── config.example/                 # 示例配置
 │   ├── launcher_apps.json
 │   ├── audio_devices.json
 │   ├── space_names.json
 │   ├── todos.json
-│   └── snippets.json
+│   ├── snippets.json
+│   └── macro_keypad.json
 ├── LICENSE
 └── README.md
 ```

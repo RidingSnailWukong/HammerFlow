@@ -1,0 +1,73 @@
+{
+  "_readme": [
+    "6 键 USB 宏键盘映射示例。复制到 config/macro_keypad.json 后生效。",
+    "deviceType 必须通过实机探测确认；Ben 当前的 0x413D/0x553A 宏键盘为 40。",
+    "动作类型：keystroke、launchApp、toggleApp、cycleAppMenuWindow（跨桌面切换 App 窗口）、switchDesktop（切换相邻桌面）。",
+    "单击/双击：同一 binding 配置 singleAction 与 doubleAction；默认延迟单击，可设 immediateSingle=true 立即执行单击；pendingHint 用于提示第二次按键。",
+    "sourceMods 必须与设备实际发出的修饰键一致；strictModifiers=true 时做精确匹配。"
+  ],
+  "enabled": true,
+  "deviceType": 40,
+  "strictModifiers": true,
+  "allowRepeat": false,
+  "showFeedback": false,
+  "doubleClickInterval": 0.4,
+  "bindings": {
+    "8": {
+      "sourceMods": ["ctrl"],
+      "label": "复制",
+      "action": { "type": "keystroke", "mods": ["cmd"], "key": "c" }
+    },
+    "9": {
+      "sourceMods": ["ctrl"],
+      "label": "企微 / 微信",
+      "singleLabel": "企业微信",
+      "immediateSingle": true,
+      "doubleClickInterval": 0.4,
+      "pendingHint": "0.4 秒内再按一次：打开微信",
+      "singleAction": { "type": "launchApp", "bundleID": "com.tencent.WeWorkMac" },
+      "doubleLabel": "微信",
+      "doubleAction": { "type": "launchApp", "bundleID": "com.tencent.xinWeChat" }
+    },
+    "1": {
+      "sourceMods": ["ctrl"],
+      "label": "粘贴",
+      "action": { "type": "keystroke", "mods": ["cmd"], "key": "v" }
+    },
+    "0": {
+      "sourceMods": ["ctrl"],
+      "label": "WorkBuddy / 左边桌面",
+      "singleLabel": "WorkBuddy",
+      "doubleClickInterval": 0.4,
+      "pendingHint": "0.4 秒内再按一次：切换到左边桌面",
+      "singleAction": { "type": "launchApp", "bundleID": "com.tencent.workbuddy.mac" },
+      "doubleLabel": "左边桌面",
+      "doubleAction": { "type": "switchDesktop", "direction": "left" }
+    },
+    "3": {
+      "sourceMods": ["ctrl"],
+      "label": "Chrome / 切换窗口",
+      "singleLabel": "Chrome",
+      "immediateSingle": true,
+      "doubleClickInterval": 0.4,
+      "pendingHint": "0.4 秒内再按一次：切换 Chrome 窗口",
+      "singleAction": { "type": "launchApp", "bundleID": "com.google.Chrome" },
+      "doubleLabel": "切换 Chrome 窗口",
+      "doubleAction": {
+        "type": "cycleAppMenuWindow",
+        "bundleID": "com.google.Chrome",
+        "singleWindowHint": "Chrome 当前只有 1 个独立窗口"
+      }
+    },
+    "117": {
+      "sourceMods": ["fn"],
+      "label": "CodeBuddy / 右边桌面",
+      "singleLabel": "CodeBuddy",
+      "doubleClickInterval": 0.4,
+      "pendingHint": "0.4 秒内再按一次：切换到右边桌面",
+      "singleAction": { "type": "launchApp", "bundleID": "com.tencent.codebuddycn" },
+      "doubleLabel": "右边桌面",
+      "doubleAction": { "type": "switchDesktop", "direction": "right" }
+    }
+  }
+}

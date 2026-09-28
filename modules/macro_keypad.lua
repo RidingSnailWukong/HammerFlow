@@ -303,6 +303,72 @@ local function cycleAppMenuWindow(action)
     end)
 end
 
+-- ==================== 带校验的切换桌面 ====================
+-- hs.spaces.gotoSpace 的机制：打开调度中心 → 忙等固定 MCwaitTime（默认 0.3s）→ AXPress 目标缩略图。
+-- 若调度中心动画尚未稳定，AXPress 会被系统忽略，但函数仍返回 true —— 表现为「日志说切了，屏幕没动」。
+-- 2026-09-28 副屏实测：0.3s 成功 4/5，1.0s 成功 6/6。
+-- 做法：先用默认等待时间切（正常情况不变慢），轮询目标屏的活动桌面确认；
+--      未生效则以 1.0s 等待重试一次；仍失败则关闭残留的调度中心并提示。
+local DESKTOP_RETRY_WAITS = { false, 1.0 } -- false = 沿用 hs.spaces.MCwaitTime
+local DESKTOP_VERIFY_TIMEOUT = 1.2
+local desktopVerifyTimer = nil              -- 常驻引用，防止 timer 被 GC
+
+local function stopDesktopVerify()
+    if desktopVerifyTimer then
+        desktopVerifyTimer:stop()
+        desktopVerifyTimer = nil
+    end
+end
+
+-- gotoSpace 在主线程忙等；期间到达的按键会让 eventtap 回调超时，系统可能自动停用 tap，需兜底恢复
+local function ensureTapEnabled()
+    if tap and not tap:isEnabled() then
+        tap:start()
+        logger.w("[switch-desktop] eventtap 被系统停用，已恢复")
+    end
+end
+
+local function gotoSpaceVerified(screenUUID, targetSpace, desc)
+    stopDesktopVerify()
+    local screen = hs.screen.find(screenUUID)
+    local attempt = 0
+
+    local function try()
+        attempt = attempt + 1
+        local wait = DESKTOP_RETRY_WAITS[attempt]
+        local defaultWait = hs.spaces.MCwaitTime
+        if wait then hs.spaces.MCwaitTime = wait end
+        local ok, err = hs.spaces.gotoSpace(targetSpace)
+        hs.spaces.MCwaitTime = defaultWait
+        ensureTapEnabled()
+        if not ok then
+            logger.w(string.format("[switch-desktop] gotoSpace 报错（第 %d 次）: %s", attempt, tostring(err)))
+        end
+
+        local deadline = hs.timer.secondsSinceEpoch() + DESKTOP_VERIFY_TIMEOUT
+        desktopVerifyTimer = hs.timer.doEvery(0.1, function()
+            if hs.spaces.activeSpaceOnScreen(screen) == targetSpace then
+                stopDesktopVerify()
+                logger.i(string.format("[switch-desktop] %s 已生效（第 %d 次）", desc, attempt))
+                return
+            end
+            if hs.timer.secondsSinceEpoch() < deadline then return end
+
+            stopDesktopVerify()
+            if attempt < #DESKTOP_RETRY_WAITS then
+                logger.w(string.format("[switch-desktop] %s 未生效，加长等待重试", desc))
+                try()
+            else
+                hs.spaces.closeMissionControl()
+                hs.alert.show("切换桌面未生效，请再试一次", { radius = 10, textSize = 14 }, 1.2)
+                logger.w(string.format("[switch-desktop] %s 重试后仍未生效", desc))
+            end
+        end)
+    end
+
+    try()
+end
+
 local function switchAdjacentDesktop(action, context)
     local direction = action.direction
     local delta = direction == "left" and -1 or (direction == "right" and 1 or nil)
@@ -314,7 +380,7 @@ local function switchAdjacentDesktop(action, context)
     -- immediateSingle 可能先把焦点带到 App 所在桌面；双击时仍应以第一次按下前的桌面为基准。
     local focusedSpace = context and context.initialSpace or hs.spaces.focusedSpace()
     local allSpaces = hs.spaces.allSpaces()
-    for _, spaces in pairs(allSpaces) do
+    for screenUUID, spaces in pairs(allSpaces) do
         for index, spaceID in ipairs(spaces) do
             if spaceID == focusedSpace then
                 local targetIndex = index + delta
@@ -329,9 +395,9 @@ local function switchAdjacentDesktop(action, context)
                     logger.i(string.format("[switch-desktop] 当前桌面 %d 已在%s边界", index, side))
                     return
                 end
-                hs.spaces.gotoSpace(targetSpace)
-                logger.i(string.format("[switch-desktop] %d -> %d (%s)",
-                    index, targetIndex, direction))
+                local desc = string.format("%d -> %d (%s)", index, targetIndex, direction)
+                logger.i("[switch-desktop] " .. desc)
+                gotoSpaceVerified(screenUUID, targetSpace, desc)
                 return
             end
         end
@@ -529,6 +595,7 @@ local function stopTap()
         menuCyclePoll:stop()
         menuCyclePoll = nil
     end
+    stopDesktopVerify()
     swallowKeyUp = {}
 end
 

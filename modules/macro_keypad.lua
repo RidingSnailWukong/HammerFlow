@@ -173,6 +173,97 @@ local function cycleAppWindow(action)
     target:focus()
 end
 
+-- ==================== 经「窗口」菜单循环（cycleAppMenuWindow） ====================
+-- 为什么走窗口菜单：Chromium 的 AX / CGWindowList 都看不到其他桌面(Space)上的窗口，
+-- 只有 App 自己的「窗口」菜单列出全部窗口，且按下菜单项会自动切到该窗口所在桌面。
+--
+-- 实现要点（2026-09-28 实测修正）：
+--   1. 按「序号」对 AX 菜单项执行 AXPress，而不是 selectMenuItem(标题)。
+--      多个窗口标题相同（如同一页面开两个窗口）时，按标题永远命中第一个 → 表现为「切不过去」。
+--   2. 只定向读取菜单栏里的「窗口」菜单（约 2ms），不再 getMenuItems() 遍历全部菜单（约 200ms，
+--      书签多时更慢，且阻塞主线程）。
+--   3. 当前窗口标记 ✓ 仅在 App 位于前台时才有；App 不在前台时菜单 AXPress 也不生效。
+--      因此先 activate，轮询到 frontmost 后再读标记并按下；✓ 缺失时用上次循环记录兜底。
+local menuCycleStates = {}   -- key -> { index, count, at }
+local menuCyclePoll = nil     -- 常驻引用，防止 timer 被 GC
+
+local function appWindowMenuItems(app)
+    local appEl = hs.axuielement.applicationElement(app)
+    local bar = appEl and appEl:attributeValue("AXMenuBar")
+    if not bar then return nil end
+
+    local windowMenu = nil
+    for _, top in ipairs(bar:attributeValue("AXChildren") or {}) do
+        local title = top:attributeValue("AXTitle")
+        if title == "窗口" or title == "Window" then
+            windowMenu = top
+            break
+        end
+    end
+    local menu = windowMenu and (windowMenu:attributeValue("AXChildren") or {})[1]
+    local all = menu and menu:attributeValue("AXChildren")
+    if type(all) ~= "table" then return nil end
+
+    -- 窗口列表位于最后一个分隔线之后
+    local lastSeparator = 0
+    for index, item in ipairs(all) do
+        if (item:attributeValue("AXTitle") or "") == "" then lastSeparator = index end
+    end
+
+    local items = {}
+    for index = lastSeparator + 1, #all do
+        local item = all[index]
+        local title = item:attributeValue("AXTitle")
+        if item:attributeValue("AXEnabled") and title and title ~= "" then
+            items[#items + 1] = item
+        end
+    end
+    return items
+end
+
+local function pressNextMenuWindow(app, action, key)
+    local items = appWindowMenuItems(app)
+    if not items then
+        logger.w("[cycle-menu-window] 找不到窗口菜单")
+        return
+    end
+
+    local n = #items
+    if n < 2 then
+        hs.alert.show(
+            action.singleWindowHint or "当前只有 1 个可切换窗口",
+            { radius = 10, textSize = 14 },
+            1.2
+        )
+        logger.i("[cycle-menu-window] 可切换窗口不足 2 个")
+        return
+    end
+
+    local current = nil
+    for index, item in ipairs(items) do
+        local mark = item:attributeValue("AXMenuItemMarkChar")
+        if mark and mark ~= "" then current = index break end
+    end
+
+    local now = hs.timer.secondsSinceEpoch()
+    local state = menuCycleStates[key]
+    local source = "mark"
+    if not current and state and state.count == n and now - state.at < 10 then
+        current, source = state.index, "memory"
+    end
+
+    local step = action.step or 1
+    local nextIndex = current and (((current - 1 + step) % n) + 1) or 1
+    local ok = items[nextIndex]:performAction("AXPress")
+    if not ok then
+        logger.w(string.format("[cycle-menu-window] 按下第 %d 项失败", nextIndex))
+        return
+    end
+    menuCycleStates[key] = { index = nextIndex, count = n, at = now }
+    logger.i(string.format("[cycle-menu-window] %s -> %d/%d (基准=%s)",
+        tostring(current or "?"), nextIndex, n, current and source or "none"))
+end
+
 local function cycleAppMenuWindow(action)
     local bundleID = action.bundleID
     local appName = action.app
@@ -187,57 +278,29 @@ local function cycleAppMenuWindow(action)
         return
     end
 
-    app:activate(true)
-    local menuItems = app:getMenuItems()
-    local windowMenu = nil
-    for _, item in ipairs(menuItems or {}) do
-        if item.AXTitle == "窗口" or item.AXTitle == "Window" then
-            windowMenu = item
-            break
-        end
-    end
+    local key = bundleID or appName
+    if menuCyclePoll then menuCyclePoll:stop() menuCyclePoll = nil end
 
-    local items = windowMenu and (windowMenu.AXChildren or {})[1] or nil
-    if type(items) ~= "table" then
-        logger.w("[cycle-menu-window] 找不到窗口菜单")
+    if app:isFrontmost() then
+        pressNextMenuWindow(app, action, key)
         return
     end
 
-    local lastSeparator = 0
-    for index, item in ipairs(items) do
-        if item.AXTitle == "" then lastSeparator = index end
-    end
-
-    local windows = {}
-    local currentIndex = nil
-    for index = lastSeparator + 1, #items do
-        local item = items[index]
-        if item.AXEnabled and item.AXTitle and item.AXTitle ~= "" then
-            windows[#windows + 1] = item.AXTitle
-            if item.AXMenuItemMarkChar and item.AXMenuItemMarkChar ~= "" then
-                currentIndex = #windows
+    -- 激活是异步的：轮询到前台再操作菜单，最多等 1 秒
+    app:activate(true)
+    local deadline = hs.timer.secondsSinceEpoch() + 1.0
+    menuCyclePoll = hs.timer.doEvery(0.05, function()
+        local ready = app:isFrontmost()
+        if ready or hs.timer.secondsSinceEpoch() > deadline then
+            menuCyclePoll:stop()
+            menuCyclePoll = nil
+            if ready then
+                pressNextMenuWindow(app, action, key)
+            else
+                logger.w("[cycle-menu-window] 等待 App 进入前台超时")
             end
         end
-    end
-
-    if #windows < 2 then
-        hs.alert.show(
-            action.singleWindowHint or "当前只有 1 个可切换窗口",
-            { radius = 10, textSize = 14 },
-            1.2
-        )
-        logger.i("[cycle-menu-window] 可切换窗口不足 2 个")
-        return
-    end
-
-    local nextIndex = currentIndex and ((currentIndex % #windows) + 1) or 1
-    local targetTitle = windows[nextIndex]
-    if not app:selectMenuItem({ windowMenu.AXTitle, targetTitle }) then
-        logger.w("[cycle-menu-window] 选择窗口失败: " .. tostring(targetTitle))
-        return
-    end
-    logger.i(string.format("[cycle-menu-window] %s -> %s",
-        tostring(currentIndex and windows[currentIndex] or "?"), targetTitle))
+    end)
 end
 
 local function switchAdjacentDesktop(action, context)
@@ -462,6 +525,10 @@ local function stopTap()
         tap = nil
     end
     stopPendingClicks()
+    if menuCyclePoll then
+        menuCyclePoll:stop()
+        menuCyclePoll = nil
+    end
     swallowKeyUp = {}
 end
 

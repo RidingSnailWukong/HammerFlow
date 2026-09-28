@@ -156,7 +156,7 @@ vim ~/.hammerspoon/config/macro_keypad.json
 - `keystroke`：发送 macOS 组合键，如 `Cmd+C`、`Cmd+V`
 - `launchApp`：按 Bundle ID 启动或聚焦 App
 - `toggleApp`：App 在前台时隐藏，否则启动或聚焦
-- `cycleAppMenuWindow`：通过指定 App 的“窗口”菜单循环切换窗口，可覆盖其他 macOS 桌面中的窗口
+- `cycleAppMenuWindow`：通过指定 App 的“窗口”菜单循环切换窗口，可覆盖其他 macOS 桌面中的窗口；按菜单项**序号**切换，多个窗口标题相同也能区分；App 不在前台时先激活再操作
 - `switchDesktop`：按 `direction: "left"` 或 `"right"` 切换到相邻桌面，边界处不循环
 - 单击/双击：默认延迟单击；设置 `immediateSingle=true` 后首次立即执行，窗口内再次按下执行双击动作
 

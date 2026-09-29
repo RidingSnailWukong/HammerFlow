@@ -4,7 +4,7 @@
     "deviceType 必须通过实机探测确认；Ben 当前的 0x413D/0x553A 宏键盘为 40。",
     "动作类型：keystroke、launchApp、toggleApp、cycleAppMenuWindow（跨桌面切换 App 窗口）、switchDesktop（切换相邻桌面）。",
     "单击/双击：同一 binding 配置 singleAction 与 doubleAction；默认延迟单击，可设 immediateSingle=true 立即执行单击；pendingHint 用于提示第二次按键。",
-    "第 2、5 键采用立即单击 + 0.4 秒双击；第 4、6 键采用延迟单击 + 0.4 秒双击，避免 App 聚焦干扰桌面切换。",
+    "第 1、2、3、5 键采用立即单击 + 0.4 秒双击（复制/粘贴要跟手）；第 4、6 键采用延迟单击 + 0.4 秒双击，避免 App 聚焦干扰桌面切换。",
     "sourceMods 必须与设备实际发出的修饰键一致；strictModifiers=true 时做精确匹配。"
   ],
   "enabled": true,
@@ -16,8 +16,13 @@
   "bindings": {
     "8": {
       "sourceMods": ["ctrl"],
-      "label": "复制",
-      "action": { "type": "keystroke", "mods": ["cmd"], "key": "c" }
+      "label": "复制 / DBX",
+      "singleLabel": "复制",
+      "immediateSingle": true,
+      "doubleClickInterval": 0.4,
+      "singleAction": { "type": "keystroke", "mods": ["cmd"], "key": "c" },
+      "doubleLabel": "DBX",
+      "doubleAction": { "type": "launchApp", "bundleID": "com.dbx.app" }
     },
     "9": {
       "sourceMods": ["ctrl"],
@@ -32,8 +37,13 @@
     },
     "1": {
       "sourceMods": ["ctrl"],
-      "label": "粘贴",
-      "action": { "type": "keystroke", "mods": ["cmd"], "key": "v" }
+      "label": "粘贴 / cmux",
+      "singleLabel": "粘贴",
+      "immediateSingle": true,
+      "doubleClickInterval": 0.4,
+      "singleAction": { "type": "keystroke", "mods": ["cmd"], "key": "v" },
+      "doubleLabel": "cmux",
+      "doubleAction": { "type": "launchApp", "bundleID": "com.cmuxterm.app" }
     },
     "0": {
       "sourceMods": ["ctrl"],

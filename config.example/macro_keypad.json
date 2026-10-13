@@ -37,13 +37,13 @@
     },
     "1": {
       "sourceMods": ["ctrl"],
-      "label": "粘贴 / cmux",
+      "label": "粘贴 / DSH Desktop",
       "singleLabel": "粘贴",
       "immediateSingle": true,
       "doubleClickInterval": 0.4,
       "singleAction": { "type": "keystroke", "mods": ["cmd"], "key": "v" },
-      "doubleLabel": "cmux",
-      "doubleAction": { "type": "launchApp", "bundleID": "com.cmuxterm.app" }
+      "doubleLabel": "DSH Desktop",
+      "doubleAction": { "type": "launchApp", "bundleID": "io.dsh.desktop" }
     },
     "0": {
       "sourceMods": ["ctrl"],

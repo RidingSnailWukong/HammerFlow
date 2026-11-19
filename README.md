@@ -19,6 +19,8 @@
 | **刘海避让** | 自动检测刘海区域，避免面板/浮层被刘海遮挡 | `Ctrl+Cmd+N` 刷新<br>`Ctrl+Cmd+Shift+N` 可视化 |
 | **Chrome 窗口循环** | 跨显示器循环切换 Chrome 窗口（系统 `Cmd+\`` 不支持跨屏/跨桌面） | `` Ctrl+` `` 下一个<br>`` Ctrl+Shift+` `` 上一个<br>`Ctrl+K` 呼出/隐藏 |
 | **6 键宏键盘** | 按设备隔离，把外接宏键盘重映射为 macOS 快捷键、应用启动和桌面切换 | 外接设备物理键 |
+| **访达就地唤出** | 把访达窗口带到当前屏幕/桌面（点 Dock 会跳到窗口所在桌面，导致无法拖放） | `Cmd+Alt+F` |
+| **锁屏并关显示器** | 先锁屏再立即关闭显示器，离开工位一键搞定 | `Ctrl+Alt+L` |
 
 ## 📦 安装
 
@@ -75,10 +77,13 @@ vim ~/.hammerspoon/config/macro_keypad.json
 ```json
 {
   "autoSwitch": true,
+  "ignore": ["MiRemoteV"],
   "output": { "priority": ["AirPods Pro", "MacBook Pro扬声器"] },
   "input":  { "priority": ["AirPods Pro", "MacBook Pro麦克风"] }
 }
 ```
+
+`ignore` 用于隐藏不想在菜单里看到的设备（如虚拟声卡），按名称**模糊匹配、不区分大小写**：写 `"MiRemoteV"` 即可隐藏 `MiRemoteV 2ch`。被忽略的设备同时不会出现在输入、输出菜单和「按优先级/下一个设备」的切换序列中。
 
 ### `space_names.json` — 桌面名称别名
 
@@ -157,10 +162,46 @@ vim ~/.hammerspoon/config/macro_keypad.json
 - `launchApp`：按 Bundle ID 启动或聚焦 App
 - `toggleApp`：App 在前台时隐藏，否则启动或聚焦
 - `cycleAppMenuWindow`：通过指定 App 的“窗口”菜单循环切换窗口，可覆盖其他 macOS 桌面中的窗口；按菜单项**序号**切换，多个窗口标题相同也能区分；App 不在前台时先激活再操作
-- `switchDesktop`：按 `direction: "left"` 或 `"right"` 切换到相邻桌面，边界处不循环
+- `switchDesktop`：按 `direction: "left"` 或 `"right"` 切换到相邻桌面，边界处不循环（切换后校验是否生效，未生效自动重试最多 3 次）
 - 单击/双击：默认延迟单击；设置 `immediateSingle=true` 后首次立即执行，窗口内再次按下执行双击动作
 
 模块精确匹配 `deviceType + keyCode + sourceMods`，吞掉宏键盘原始 Ctrl/Fn 事件，再注入目标事件；合成事件带防递归标记。配置保存后自动热重载。
+
+> **桌面切换实现（macOS 27 走 AppleEvent 通道）**：`hs.spaces.gotoSpace` 依赖调度中心 AX 树中的 `mc.display` / `mc.spaces` 节点，这两个节点在 macOS 27 上已不存在，调用只会返回 `no display with specified id found`；合成的 CGEvent 也无法触发系统「切换桌面」快捷键。因此 `switchDesktop` 改为经 System Events 发送 `key code 123/124`（←/→）+ `control`，再轮询目标屏的活动桌面确认，未生效自动重试。
+
+### `finder_here.json` — 访达就地唤出
+
+点 Dock 上的访达图标时，macOS 会切到访达窗口所在的桌面，导致没法在当前桌面拖文件。本模块把访达带到**当前屏幕**：
+
+1. 当前屏幕已有访达窗口 → 直接激活
+2. 有窗口但都在另一块屏 → 把最前面那个搬过来
+3. 完全没有窗口 → 新建窗口后搬到当前屏幕
+
+```json
+{
+  "enabled": true,
+  "hotkey": { "mods": ["cmd", "alt"], "key": "f" },
+  "defaultPath": null,
+  "frame": null,
+  "hintAllDesktops": true,
+  "alertOnFail": true
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `hotkey` | 唤出快捷键 |
+| `defaultPath` | 新建窗口时的目录，留空用访达默认位置 |
+| `frame` | 可选，`{x,y,w,h}` 为相对当前屏幕的比例，用于把窗口固定在右侧、与目标 App 并排拖放 |
+| `hintAllDesktops` | 窗口未覆盖该屏幕全部桌面时提示开启「所有桌面」 |
+
+实现约束（macOS 26 实测）：
+
+- `hs.spaces.moveWindowToSpace` 已失效（返回 `true` 但窗口不动），因此改用 `hs.window:moveToScreen()` 把窗口带到目标屏幕的当前桌面
+- 对访达调用 `hs.window:focus()` / `:raise()` 会把焦点弹回上一个 App，只能用 `app:activate()`，提升具体窗口走 AppleScript `set index`
+- `hs.window` 没有窗口层级接口，**无法让访达置顶**，需借助第三方工具
+
+建议同时在 Dock 右键访达 → 选项 → **所有桌面**，这样窗口在该屏幕的每个桌面都可见，点 Dock 也不会跳桌面。
 
 ## 📁 项目结构
 
@@ -175,21 +216,25 @@ HammerFlow/
 │   ├── screen_draw.lua             # 屏幕画笔
 │   ├── focus_alert.lua             # 专注度提醒
 │   ├── notch_avoidance.lua         # 刘海避让
-│   └── macro_keypad.lua            # 6 键 USB 宏键盘映射
+│   ├── macro_keypad.lua            # 6 键 USB 宏键盘映射
+│   ├── finder_here.lua             # 访达就地唤出（带到当前屏幕/桌面）
+│   └── lock_screen.lua             # 锁屏并关闭显示器（Ctrl+Alt+L）
 ├── config/                         # 个人配置（git ignored）
 │   ├── launcher_apps.json
 │   ├── audio_devices.json
 │   ├── space_names.json
 │   ├── todos.json
 │   ├── snippets.json
-│   └── macro_keypad.json
+│   ├── macro_keypad.json
+│   └── finder_here.json
 ├── config.example/                 # 示例配置
 │   ├── launcher_apps.json
 │   ├── audio_devices.json
 │   ├── space_names.json
 │   ├── todos.json
 │   ├── snippets.json
-│   └── macro_keypad.json
+│   ├── macro_keypad.json
+│   └── finder_here.json
 ├── LICENSE
 └── README.md
 ```

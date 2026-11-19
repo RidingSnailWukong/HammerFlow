@@ -1,0 +1,16 @@
+{
+  "_readme": [
+    "在当前桌面唤出访达：点 Dock 图标会跳到访达窗口所在的桌面，导致无法在当前桌面拖放文件。",
+    "本模块改为——当前桌面已有访达窗口则直接激活，否则新建窗口（新窗口总是落在当前桌面）再激活。",
+    "macOS 26 实测：hs.spaces.moveWindowToSpace 已失效，无法搬运已有窗口，因此只能新建。",
+    "hotkey：唤出快捷键；closeStrayWindows：是否顺手关闭位于其他桌面的旧访达窗口。",
+    "defaultPath：新建窗口时的目标目录（如 /Users/benhuachen/Downloads），留空则用访达默认位置。",
+    "frame：可选，{x,y,w,h} 为相对当前屏幕的比例，用于把窗口固定到右侧，方便与目标 App 并排拖放。"
+  ],
+  "enabled": true,
+  "hotkey": { "mods": ["cmd", "alt"], "key": "f" },
+  "closeStrayWindows": false,
+  "defaultPath": null,
+  "frame": null,
+  "alertOnFail": true
+}

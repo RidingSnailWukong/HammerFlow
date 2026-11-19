@@ -65,6 +65,31 @@ local function loadConfig()
 end
 
 -- ============================================================
+-- 忽略列表: 隐藏虚拟声卡等不关心的设备
+-- ============================================================
+-- 配置项 ignore = { "MiRemoteV", ... }，按名称模糊匹配（不区分大小写）。
+local function isIgnored(name)
+    local list = audioConfig.ignore
+    if not name or type(list) ~= "table" then return false end
+    local lower = name:lower()
+    for _, pattern in ipairs(list) do
+        if type(pattern) == "string" and pattern ~= ""
+            and lower:find(pattern:lower(), 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function filterDevices(devices)
+    local kept = {}
+    for _, dev in ipairs(devices or {}) do
+        if not isIgnored(dev:name()) then kept[#kept + 1] = dev end
+    end
+    return kept
+end
+
+-- ============================================================
 -- 核心: 按优先级查找最佳设备
 -- ============================================================
 
@@ -74,9 +99,9 @@ local function findHighestPriorityDevice(deviceType)
 
     local available
     if deviceType == "output" then
-        available = hs.audiodevice.allOutputDevices()
+        available = filterDevices(hs.audiodevice.allOutputDevices())
     else
-        available = hs.audiodevice.allInputDevices()
+        available = filterDevices(hs.audiodevice.allInputDevices())
     end
 
     local nameMap = {}
@@ -175,9 +200,9 @@ end
 local function switchToNextDevice(deviceType)
     local available
     if deviceType == "output" then
-        available = hs.audiodevice.allOutputDevices()
+        available = filterDevices(hs.audiodevice.allOutputDevices())
     else
-        available = hs.audiodevice.allInputDevices()
+        available = filterDevices(hs.audiodevice.allInputDevices())
     end
 
     if #available == 0 then return end
@@ -257,7 +282,7 @@ updateMenubar = function()
     table.insert(items, { title = "-" })
 
     table.insert(items, { title = "切换输出设备", disabled = true })
-    for _, dev in ipairs(hs.audiodevice.allOutputDevices()) do
+    for _, dev in ipairs(filterDevices(hs.audiodevice.allOutputDevices())) do
         local name = dev:name()
         local mark = (outDev and name == outName) and "  ● " or "    "
         table.insert(items, {
@@ -275,7 +300,7 @@ updateMenubar = function()
     table.insert(items, { title = "-" })
 
     table.insert(items, { title = "切换输入设备", disabled = true })
-    for _, dev in ipairs(hs.audiodevice.allInputDevices()) do
+    for _, dev in ipairs(filterDevices(hs.audiodevice.allInputDevices())) do
         local name = dev:name()
         local mark = (inDev and name == inName) and "  ● " or "    "
         table.insert(items, {

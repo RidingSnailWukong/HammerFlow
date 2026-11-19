@@ -304,13 +304,16 @@ local function cycleAppMenuWindow(action)
 end
 
 -- ==================== 带校验的切换桌面 ====================
--- hs.spaces.gotoSpace 的机制：打开调度中心 → 忙等固定 MCwaitTime（默认 0.3s）→ AXPress 目标缩略图。
--- 若调度中心动画尚未稳定，AXPress 会被系统忽略，但函数仍返回 true —— 表现为「日志说切了，屏幕没动」。
--- 2026-09-28 副屏实测：0.3s 成功 4/5，1.0s 成功 6/6。
--- 做法：先用默认等待时间切（正常情况不变慢），轮询目标屏的活动桌面确认；
---      未生效则以 1.0s 等待重试一次；仍失败则关闭残留的调度中心并提示。
-local DESKTOP_RETRY_WAITS = { false, 1.0 } -- false = 沿用 hs.spaces.MCwaitTime
-local DESKTOP_VERIFY_TIMEOUT = 1.2
+-- 2026-10-16 复核：macOS 27 上 hs.spaces.gotoSpace 已彻底不可用。
+--   它依赖调度中心 AX 树中的 mc.display / mc.spaces 节点，而这两个节点现在完全不存在
+--   （实测打开调度中心后 mc 子树为空），因此只会返回 "no display with specified id found"。
+--   同时合成的 CGEvent（hs.eventtap.keyStroke）也无法触发系统「切换桌面」快捷键。
+-- 可用替代：System Events 发送 key code（123=← / 124=→）+ control，实测可切换桌面
+--   （osascript 走 AppleEvent 通道，与 Hammerspoon 合成 CGEvent 不是同一条路径）。
+-- 做法：发一次方向键 → 轮询目标屏活动桌面确认；未生效则重试，最多 3 次；仍失败则提示。
+local SWITCH_KEYCODES = { left = 123, right = 124 }
+local DESKTOP_VERIFY_TIMEOUT = 1.0
+local DESKTOP_MAX_ATTEMPTS = 3
 local desktopVerifyTimer = nil              -- 常驻引用，防止 timer 被 GC
 
 local function stopDesktopVerify()
@@ -328,22 +331,33 @@ local function ensureTapEnabled()
     end
 end
 
-local function gotoSpaceVerified(screenUUID, targetSpace, desc)
+--- 通过 System Events 发送「切换桌面」系统快捷键
+local function sendSpaceKey(direction)
+    local keyCode = SWITCH_KEYCODES[direction]
+    if not keyCode then return false end
+    local script = string.format(
+        'tell application "System Events" to key code %d using control down', keyCode)
+    local ok, res, err = hs.osascript.applescript(script)
+    if not ok then
+        logger.w(string.format("[switch-desktop] System Events 发送失败: %s / %s",
+            tostring(res), tostring(err)))
+    end
+    return ok
+end
+
+local function gotoSpaceVerified(screenUUID, targetSpace, desc, direction)
     stopDesktopVerify()
     local screen = hs.screen.find(screenUUID)
+    if not screen then
+        logger.w("[switch-desktop] 屏幕已不存在: " .. tostring(screenUUID))
+        return
+    end
     local attempt = 0
 
     local function try()
         attempt = attempt + 1
-        local wait = DESKTOP_RETRY_WAITS[attempt]
-        local defaultWait = hs.spaces.MCwaitTime
-        if wait then hs.spaces.MCwaitTime = wait end
-        local ok, err = hs.spaces.gotoSpace(targetSpace)
-        hs.spaces.MCwaitTime = defaultWait
+        sendSpaceKey(direction)
         ensureTapEnabled()
-        if not ok then
-            logger.w(string.format("[switch-desktop] gotoSpace 报错（第 %d 次）: %s", attempt, tostring(err)))
-        end
 
         local deadline = hs.timer.secondsSinceEpoch() + DESKTOP_VERIFY_TIMEOUT
         desktopVerifyTimer = hs.timer.doEvery(0.1, function()
@@ -355,13 +369,12 @@ local function gotoSpaceVerified(screenUUID, targetSpace, desc)
             if hs.timer.secondsSinceEpoch() < deadline then return end
 
             stopDesktopVerify()
-            if attempt < #DESKTOP_RETRY_WAITS then
-                logger.w(string.format("[switch-desktop] %s 未生效，加长等待重试", desc))
+            if attempt < DESKTOP_MAX_ATTEMPTS then
+                logger.w(string.format("[switch-desktop] %s 未生效，重试（第 %d 次）", desc, attempt + 1))
                 try()
             else
-                hs.spaces.closeMissionControl()
                 hs.alert.show("切换桌面未生效，请再试一次", { radius = 10, textSize = 14 }, 1.2)
-                logger.w(string.format("[switch-desktop] %s 重试后仍未生效", desc))
+                logger.w(string.format("[switch-desktop] %s 重试 %d 次后仍未生效", desc, attempt))
             end
         end)
     end
@@ -397,7 +410,7 @@ local function switchAdjacentDesktop(action, context)
                 end
                 local desc = string.format("%d -> %d (%s)", index, targetIndex, direction)
                 logger.i("[switch-desktop] " .. desc)
-                gotoSpaceVerified(screenUUID, targetSpace, desc)
+                gotoSpaceVerified(screenUUID, targetSpace, desc, direction)
                 return
             end
         end

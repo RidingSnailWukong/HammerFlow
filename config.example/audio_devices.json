@@ -11,5 +11,6 @@
       "AirPods Pro",
       "MacBook Pro麦克风"
     ]
-  }
+  },
+  "ignore": []
 }

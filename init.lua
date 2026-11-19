@@ -405,6 +405,14 @@ notchAvoidance.start()
 local macroKeypad = require("modules.macro_keypad")
 macroKeypad.start()
 
+-- 在当前桌面唤出访达（Cmd+Alt+F）：点 Dock 会跳到窗口所在桌面，这里改为就地开窗
+local finderHere = require("modules.finder_here")
+finderHere.start()
+
+-- 锁屏并关闭显示器（Ctrl+Alt+L）
+local lockScreen = require("modules.lock_screen")
+lockScreen.start()
+
 hs.notify.new({title="Hammerspoon", informativeText="所有模块已加载"}):send()
 
 -- ================= 刘海避让快捷键 =================

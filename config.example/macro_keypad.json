@@ -16,11 +16,11 @@
   "bindings": {
     "8": {
       "sourceMods": ["ctrl"],
-      "label": "复制 / DBX",
-      "singleLabel": "复制",
+      "label": "访达 / DBX",
+      "singleLabel": "访达",
       "immediateSingle": true,
       "doubleClickInterval": 0.4,
-      "singleAction": { "type": "keystroke", "mods": ["cmd"], "key": "c" },
+      "singleAction": { "type": "keystroke", "mods": ["cmd", "alt"], "key": "f" },
       "doubleLabel": "DBX",
       "doubleAction": { "type": "launchApp", "bundleID": "com.dbx.app" }
     },
@@ -37,11 +37,11 @@
     },
     "1": {
       "sourceMods": ["ctrl"],
-      "label": "粘贴 / DSH Desktop",
-      "singleLabel": "粘贴",
+      "label": "DBX / DSH Desktop",
+      "singleLabel": "DBX",
       "immediateSingle": true,
       "doubleClickInterval": 0.4,
-      "singleAction": { "type": "keystroke", "mods": ["cmd"], "key": "v" },
+      "singleAction": { "type": "launchApp", "bundleID": "com.dbx.app" },
       "doubleLabel": "DSH Desktop",
       "doubleAction": { "type": "launchApp", "bundleID": "io.dsh.desktop" }
     },
